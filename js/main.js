@@ -189,7 +189,16 @@ function updateCartDisplay() {
     
     cartItemsContainer.innerHTML = cartHTML;
     
-    const deliveryFee = 5.00;
+    // Calculate dynamic delivery fee based on selected items quantity
+    const selectedItems = cart.filter(item => item.selected);
+    const totalQuantity = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
+    let deliveryFee = 5.00; // Base fee for 1-4 items
+    if (totalQuantity > 8) {
+        deliveryFee = 15.00;
+    } else if (totalQuantity > 4) {
+        deliveryFee = 10.00;
+    }
+    
     const total = subtotal + deliveryFee;
     
     if (cartSubtotal) cartSubtotal.textContent = `RM ${subtotal.toFixed(2)}`;

@@ -138,6 +138,14 @@ if (isset($_POST['delete_rider'])) {
     $stmt->execute([$id]);
 }
 
+// Handle rider status toggle
+if (isset($_POST['toggle_rider_status'])) {
+    $rider_id = $_POST['rider_id'];
+    $new_status = $_POST['new_rider_status'];
+    $stmt = $pdo->prepare("UPDATE rider SET rider_status = ? WHERE rider_id = ?");
+    $stmt->execute([$new_status, $rider_id]);
+}
+
 // Get data
 $stmt = $pdo->prepare("SELECT * FROM product ORDER BY product_id DESC");
 $stmt->execute();
@@ -240,7 +248,7 @@ $categories = $stmt->fetchAll();
                                         </button>
                                         <form method="POST" style="display: inline-block;">
                                             <input type="hidden" name="product_id" value="<?php echo $product['product_id']; ?>">
-                                            <button type="submit" name="delete_product" class="btn btn-danger" style="font-size: 0.875rem;" onclick="return confirm('Are you sure?')">
+                                            <button type="submit" name="delete_product" class="btn btn-danger" style="font-size: 0.875rem; padding: 0.5rem 1rem;" onclick="return confirm('Are you sure?')">
                                                 🗑️ Delete
                                             </button>
                                         </form>
@@ -284,7 +292,7 @@ $categories = $stmt->fetchAll();
                                     <td>
                                         <form method="POST" style="display: inline-block;">
                                             <input type="hidden" name="category_id" value="<?php echo $category['category_id']; ?>">
-                                            <button type="submit" name="delete_category" class="btn btn-danger" style="font-size: 0.875rem;" onclick="return confirm('Are you sure?')">
+                                            <button type="submit" name="delete_category" class="btn btn-danger" style="font-size: 0.875rem; padding: 0.5rem 1rem;" onclick="return confirm('Are you sure?')">
                                                 🗑️ Delete
                                             </button>
                                         </form>
@@ -343,7 +351,7 @@ $categories = $stmt->fetchAll();
                                                 </button>
                                                 <form method="POST" style="display: inline-block;">
                                                     <input type="hidden" name="product_id" value="<?php echo $product['product_id']; ?>">
-                                                    <button type="submit" name="delete_product" class="btn btn-danger" style="font-size: 0.875rem;" onclick="return confirm('Are you sure?')">
+                                                    <button type="submit" name="delete_product" class="btn btn-danger" style="font-size: 0.875rem; padding: 0.5rem 1rem;" onclick="return confirm('Are you sure?')">
                                                         🗑️ Delete
                                                     </button>
                                                 </form>
@@ -385,7 +393,7 @@ $categories = $stmt->fetchAll();
                                     <td>
                                         <form method="POST" style="display: inline-block;">
                                             <input type="hidden" name="staff_id" value="<?php echo $member['staff_id']; ?>">
-                                            <button type="submit" name="delete_staff" class="btn btn-danger" style="font-size: 0.875rem;" onclick="return confirm('Are you sure?')">
+                                            <button type="submit" name="delete_staff" class="btn btn-danger" style="font-size: 0.875rem; padding: 0.5rem 1rem;" onclick="return confirm('Are you sure?')">
                                                 Delete
                                             </button>
                                         </form>
@@ -413,6 +421,7 @@ $categories = $stmt->fetchAll();
                                 <th>Email</th>
                                 <th>Phone</th>
                                 <th>Vehicle</th>
+                                <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -427,7 +436,17 @@ $categories = $stmt->fetchAll();
                                     <td>
                                         <form method="POST" style="display: inline-block;">
                                             <input type="hidden" name="rider_id" value="<?php echo $rider['rider_id']; ?>">
-                                            <button type="submit" name="delete_rider" class="btn btn-danger" style="font-size: 0.875rem;" onclick="return confirm('Are you sure?')">
+                                            <input type="hidden" name="toggle_rider_status" value="1">
+                                            <input type="hidden" name="new_rider_status" value="<?php echo $rider['rider_status'] == 1 ? 0 : 1; ?>">
+                                            <button type="submit" class="btn" style="background: <?php echo $rider['rider_status'] == 1 ? '#28a745' : '#dc3545'; ?>; color: white; font-size: 0.875rem; padding: 0.5rem 1rem;">
+                                                <?php echo $rider['rider_status'] == 1 ? '🟢 Available' : '🔴 Unavailable'; ?>
+                                            </button>
+                                        </form>
+                                    </td>
+                                    <td>
+                                        <form method="POST" style="display: inline-block;">
+                                            <input type="hidden" name="rider_id" value="<?php echo $rider['rider_id']; ?>">
+                                            <button type="submit" name="delete_rider" class="btn btn-danger" style="font-size: 0.875rem; padding: 0.5rem 1rem;" onclick="return confirm('Are you sure?')">
                                                 Delete
                                             </button>
                                         </form>

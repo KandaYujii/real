@@ -21,6 +21,30 @@ $stmt = $pdo->prepare("SELECT DATE_FORMAT(order_date, '%Y-%m') as month, SUM(tot
 $stmt->execute();
 $monthly_revenue = $stmt->fetchAll();
 
+// Daily and Monthly Order Values (excluding delivery fees)
+$today = date('Y-m-d');
+$current_month = date('Y-m');
+
+$stmt = $pdo->prepare("SELECT 
+    SUM(total_price - CASE 
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 8 THEN 15.00
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 4 THEN 10.00
+        ELSE 5.00
+    END) as daily_order_value
+    FROM orders o WHERE DATE(order_date) = ? AND order_status = 'Delivered'");
+$stmt->execute([$today]);
+$daily_order_value = $stmt->fetch()['daily_order_value'] ?? 0;
+
+$stmt = $pdo->prepare("SELECT 
+    SUM(total_price - CASE 
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 8 THEN 15.00
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 4 THEN 10.00
+        ELSE 5.00
+    END) as monthly_order_value
+    FROM orders o WHERE DATE_FORMAT(order_date, '%Y-%m') = ? AND order_status = 'Delivered'");
+$stmt->execute([$current_month]);
+$monthly_order_value = $stmt->fetch()['monthly_order_value'] ?? 0;
+
 // 2. Most Popular Items
 $stmt = $pdo->prepare("SELECT p.product_name, SUM(od.qty) as total_sold 
                       FROM order_details od 
@@ -122,11 +146,21 @@ $avg_order_value = $stmt->fetch()['avg_value'];
         <div class="dashboard-content">
             <!-- Key Metrics -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                <div style="background: linear-gradient(135deg, #ffc107, #e0a800); color: white; padding: 2rem; border-radius: 15px; text-align: center;">
+                    <h3>Today's Order Value</h3>
+                    <p style="font-size: 2rem; font-weight: 600;">RM <?php echo number_format($daily_order_value, 2); ?></p>
+                    <small>Excluding delivery fees</small>
+                </div>
+                <div style="background: linear-gradient(135deg, #17a2b8, #138496); color: white; padding: 2rem; border-radius: 15px; text-align: center;">
+                    <h3>Monthly Order Value</h3>
+                    <p style="font-size: 2rem; font-weight: 600;">RM <?php echo number_format($monthly_order_value, 2); ?></p>
+                    <small>Excluding delivery fees</small>
+                </div>
                 <div style="background: linear-gradient(135deg, #28a745, #20c997); color: white; padding: 2rem; border-radius: 15px; text-align: center;">
                     <h3>Average Order Value</h3>
                     <p style="font-size: 2rem; font-weight: 600;">RM <?php echo number_format($avg_order_value, 2); ?></p>
                 </div>
-                <div style="background: linear-gradient(135deg, #17a2b8, #138496); color: white; padding: 2rem; border-radius: 15px; text-align: center;">
+                <div style="background: linear-gradient(135deg, #6f42c1, #5a32a3); color: white; padding: 2rem; border-radius: 15px; text-align: center;">
                     <h3>Total Staff</h3>
                     <p style="font-size: 2rem; font-weight: 600;"><?php echo $staff_count; ?></p>
                 </div>

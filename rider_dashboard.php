@@ -22,6 +22,13 @@ if (isset($_POST['update_delivery'])) {
     }
 }
 
+// Handle availability toggle
+if (isset($_POST['toggle_availability'])) {
+    $new_status = $_POST['availability_status'];
+    $stmt = $pdo->prepare("UPDATE rider SET rider_status = ? WHERE rider_id = ?");
+    $stmt->execute([$new_status, $_SESSION['user_id']]);
+}
+
 // Handle profile update
 if (isset($_POST['update_profile'])) {
     $username = $_POST['username'];
@@ -65,28 +72,69 @@ $today = date('Y-m-d');
 $week_start = date('Y-m-d', strtotime('monday this week'));
 $month_start = date('Y-m-01');
 
-// Today's earnings
-$stmt = $pdo->prepare("SELECT SUM(total_price * 0.1) as total FROM orders WHERE rider_id = ? AND DATE(order_date) = ? AND order_status = 'Delivered'");
+// Today's earnings - delivery fees only
+$stmt = $pdo->prepare("SELECT 
+    SUM(CASE 
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 8 THEN 15.00
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 4 THEN 10.00
+        ELSE 5.00
+    END) as total 
+    FROM orders o WHERE rider_id = ? AND DATE(order_date) = ? AND order_status = 'Delivered'");
 $stmt->execute([$_SESSION['user_id'], $today]);
 $today_earnings = $stmt->fetch()['total'] ?? 0;
 
-// This week's earnings
-$stmt = $pdo->prepare("SELECT SUM(total_price * 0.1) as total FROM orders WHERE rider_id = ? AND DATE(order_date) >= ? AND order_status = 'Delivered'");
+// This week's earnings - delivery fees only
+$stmt = $pdo->prepare("SELECT 
+    SUM(CASE 
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 8 THEN 15.00
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 4 THEN 10.00
+        ELSE 5.00
+    END) as total 
+    FROM orders o WHERE rider_id = ? AND DATE(order_date) >= ? AND order_status = 'Delivered'");
 $stmt->execute([$_SESSION['user_id'], $week_start]);
 $week_earnings = $stmt->fetch()['total'] ?? 0;
 
-// This month's earnings
-$stmt = $pdo->prepare("SELECT SUM(total_price * 0.1) as total FROM orders WHERE rider_id = ? AND DATE(order_date) >= ? AND order_status = 'Delivered'");
+// This month's earnings - delivery fees only
+$stmt = $pdo->prepare("SELECT 
+    SUM(CASE 
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 8 THEN 15.00
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 4 THEN 10.00
+        ELSE 5.00
+    END) as total 
+    FROM orders o WHERE rider_id = ? AND DATE(order_date) >= ? AND order_status = 'Delivered'");
 $stmt->execute([$_SESSION['user_id'], $month_start]);
 $month_earnings = $stmt->fetch()['total'] ?? 0;
 
-// Payment method breakdown for today
+// Total sales (order value without delivery fees) for today
 $stmt = $pdo->prepare("SELECT 
-    SUM(CASE WHEN payment_method = 'cod' THEN total_price * 0.1 ELSE 0 END) as cod_total,
-    SUM(CASE WHEN payment_method = 'qr' THEN total_price * 0.1 ELSE 0 END) as qr_total,
+    SUM(total_price - CASE 
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 8 THEN 15.00
+        WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 4 THEN 10.00
+        ELSE 5.00
+    END) as total_sales
+    FROM orders o WHERE rider_id = ? AND DATE(order_date) = ? AND order_status = 'Delivered'");
+$stmt->execute([$_SESSION['user_id'], $today]);
+$today_sales = $stmt->fetch()['total_sales'] ?? 0;
+
+// Payment method breakdown for today - delivery fees only
+$stmt = $pdo->prepare("SELECT 
+    SUM(CASE WHEN payment_method = 'cod' THEN 
+        CASE 
+            WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 8 THEN 15.00
+            WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 4 THEN 10.00
+            ELSE 5.00
+        END 
+    ELSE 0 END) as cod_total,
+    SUM(CASE WHEN payment_method = 'qr' THEN 
+        CASE 
+            WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 8 THEN 15.00
+            WHEN (SELECT SUM(qty) FROM order_details WHERE orders_id = o.order_id) > 4 THEN 10.00
+            ELSE 5.00
+        END 
+    ELSE 0 END) as qr_total,
     COUNT(CASE WHEN payment_method = 'cod' THEN 1 END) as cod_count,
     COUNT(CASE WHEN payment_method = 'qr' THEN 1 END) as qr_count
-    FROM orders 
+    FROM orders o
     WHERE rider_id = ? AND DATE(order_date) = ? AND order_status = 'Delivered'");
 $stmt->execute([$_SESSION['user_id'], $today]);
 $payment_breakdown = $stmt->fetch();
@@ -123,9 +171,31 @@ $payment_breakdown = $stmt->fetch();
         <div class="dashboard-content">
             <div class="dashboard-tabs">
                 <button class="tab-btn active" onclick="showTab('orders')">📦 My Deliveries</button>
-                <button class="tab-btn" onclick="showTab('profile')">👤 Profile</button>
                 <button class="tab-btn" onclick="showTab('earnings')">💰 Earnings</button>
                 <button class="tab-btn" onclick="showTab('statistics')">📊 Statistics</button>
+            </div>
+            
+            <!-- Availability Toggle -->
+            <div style="background: white; padding: 1.5rem; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h3 style="margin: 0; color: #8B4513;">🚦 Availability Status</h3>
+                        <p style="margin: 0.5rem 0 0 0; color: #666;">Toggle your availability to receive new delivery assignments</p>
+                    </div>
+                    <form method="POST" style="display: flex; align-items: center; gap: 1rem;">
+                        <span style="font-weight: 500; color: <?php echo $rider['rider_status'] == 1 ? '#28a745' : '#dc3545'; ?>;">
+                            <?php echo $rider['rider_status'] == 1 ? '🟢 Available' : '🔴 Unavailable'; ?>
+                        </span>
+                        <label class="switch" style="position: relative; display: inline-block; width: 60px; height: 34px;">
+                            <input type="hidden" name="availability_status" value="<?php echo $rider['rider_status'] == 1 ? 0 : 1; ?>">
+                            <input type="checkbox" <?php echo $rider['rider_status'] == 1 ? 'checked' : ''; ?> onchange="this.form.submit()" style="opacity: 0; width: 0; height: 0;">
+                            <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: <?php echo $rider['rider_status'] == 1 ? '#28a745' : '#ccc'; ?>; transition: .4s; border-radius: 34px; <?php echo $rider['rider_status'] == 1 ? '' : 'background-color: #ccc;'; ?>">
+                                <span style="position: absolute; content: ''; height: 26px; width: 26px; left: <?php echo $rider['rider_status'] == 1 ? '30px' : '4px'; ?>; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%;"></span>
+                            </span>
+                        </label>
+                        <input type="hidden" name="toggle_availability" value="1">
+                    </form>
+                </div>
             </div>
             
             <!-- Orders Tab -->
@@ -202,60 +272,27 @@ $payment_breakdown = $stmt->fetch();
                 <?php endif; ?>
             </div>
             
-            <!-- Profile Tab -->
-            <div id="profile" class="tab-content">
-                <h2>Profile Settings</h2>
-                <div style="background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-                    <form method="POST">
-                        <div class="form-group">
-                            <label>Rider ID (Read Only)</label>
-                            <input type="text" value="<?php echo $rider['rider_id']; ?>" class="form-control" readonly>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="username">Username</label>
-                            <input type="text" id="username" name="username" value="<?php echo htmlspecialchars($rider['rider_username']); ?>" class="form-control" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="email">Email</label>
-                            <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($rider['rider_email']); ?>" class="form-control" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="phone">Phone Number</label>
-                            <input type="tel" id="phone" name="phone" value="<?php echo htmlspecialchars($rider['rider_phonenumber']); ?>" class="form-control" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="vehicle">Vehicle Information</label>
-                            <input type="text" id="vehicle" name="vehicle" value="<?php echo htmlspecialchars($rider['rider_vehicleinfo']); ?>" class="form-control" placeholder="e.g., Honda Wave 125, ABC1234" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="password">New Password (leave blank to keep current)</label>
-                            <input type="password" id="password" name="password" class="form-control">
-                        </div>
-                        
-                        <button type="submit" name="update_profile" class="btn btn-primary">Update Profile</button>
-                    </form>
-                </div>
-            </div>
-            
             <!-- Earnings Tab -->
             <div id="earnings" class="tab-content">
                 <h2>💰 Earnings Overview</h2>
                 
                 <!-- Earnings Cards -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    <div style="background: linear-gradient(135deg, #17a2b8, #138496); color: white; padding: 2rem; border-radius: 15px; text-align: center; box-shadow: 0 5px 15px rgba(23,162,184,0.3);">
+                        <div style="font-size: 2.5rem; margin-bottom: 1rem;">💰</div>
+                        <h3 style="margin-bottom: 1rem;">Total Sales Today</h3>
+                        <p style="font-size: 1.5rem; font-weight: 600; margin: 0;">
+                            RM <?php echo number_format($today_sales, 2); ?>
+                        </p>
+                    </div>
                     <div style="background: linear-gradient(135deg, #28a745, #20c997); color: white; padding: 2rem; border-radius: 15px; text-align: center; box-shadow: 0 5px 15px rgba(40,167,69,0.3);">
                         <div style="font-size: 2.5rem; margin-bottom: 1rem;">📅</div>
-                        <h3 style="margin-bottom: 1rem;">Today's Earnings</h3>
+                        <h3 style="margin-bottom: 1rem;">Delivery Fees Today</h3>
                         <p style="font-size: 1.5rem; font-weight: 600; margin: 0;">
                             RM <?php echo number_format($today_earnings, 2); ?>
                         </p>
                     </div>
-                    <div style="background: linear-gradient(135deg, #17a2b8, #138496); color: white; padding: 2rem; border-radius: 15px; text-align: center; box-shadow: 0 5px 15px rgba(23,162,184,0.3);">
+                    <div style="background: linear-gradient(135deg, #ffc107, #e0a800); color: white; padding: 2rem; border-radius: 15px; text-align: center; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">
                         <div style="font-size: 2.5rem; margin-bottom: 1rem;">📊</div>
                         <h3 style="margin-bottom: 1rem;">This Week</h3>
                         <p style="font-size: 1.5rem; font-weight: 600; margin: 0;">
@@ -264,7 +301,7 @@ $payment_breakdown = $stmt->fetch();
                     </div>
                     <div style="background: linear-gradient(135deg, #8B4513, #A0522D); color: white; padding: 2rem; border-radius: 15px; text-align: center; box-shadow: 0 5px 15px rgba(139,69,19,0.3);">
                         <div style="font-size: 2.5rem; margin-bottom: 1rem;">📈</div>
-                        <h3 style="margin-bottom: 1rem;">This Month</h3>
+                        <h3 style="margin-bottom: 1rem;">Total Earned</h3>
                         <p style="font-size: 1.5rem; font-weight: 600; margin: 0;">
                             RM <?php echo number_format($month_earnings, 2); ?>
                         </p>
@@ -273,11 +310,11 @@ $payment_breakdown = $stmt->fetch();
                 
                 <!-- Payment Method Breakdown -->
                 <div style="background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-                    <h3 style="color: #8B4513; margin-bottom: 2rem; text-align: center;">💳 Today's Payment Breakdown</h3>
+                    <h3 style="color: #8B4513; margin-bottom: 2rem; text-align: center;">💳 Today's Delivery Fee Breakdown</h3>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
                         <div style="text-align: center; padding: 1.5rem; background: #fff3cd; border-radius: 10px; border: 2px solid #ffeaa7;">
                             <div style="font-size: 2rem; margin-bottom: 0.5rem;">💵</div>
-                            <h4 style="color: #856404; margin-bottom: 1rem;">Cash on Delivery</h4>
+                            <h4 style="color: #856404; margin-bottom: 1rem;">COD Deliveries</h4>
                             <p style="font-size: 1.25rem; font-weight: 600; color: #856404; margin-bottom: 0.5rem;">
                                 RM <?php echo number_format($payment_breakdown['cod_total'] ?? 0, 2); ?>
                             </p>
@@ -285,7 +322,7 @@ $payment_breakdown = $stmt->fetch();
                         </div>
                         <div style="text-align: center; padding: 1.5rem; background: #d1ecf1; border-radius: 10px; border: 2px solid #bee5eb;">
                             <div style="font-size: 2rem; margin-bottom: 0.5rem;">📱</div>
-                            <h4 style="color: #0c5460; margin-bottom: 1rem;">QR Payment</h4>
+                            <h4 style="color: #0c5460; margin-bottom: 1rem;">QR Deliveries</h4>
                             <p style="font-size: 1.25rem; font-weight: 600; color: #0c5460; margin-bottom: 0.5rem;">
                                 RM <?php echo number_format($payment_breakdown['qr_total'] ?? 0, 2); ?>
                             </p>

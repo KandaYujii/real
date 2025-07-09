@@ -139,7 +139,6 @@ $categories = $stmt->fetchAll();
                 <button class="tab-btn active" onclick="showTab('home')">🏠 Home</button>
                 <button class="tab-btn" onclick="showTab('menu')">📋 Menu</button>
                 <button class="tab-btn" onclick="showTab('about')">ℹ️ About Us</button>
-                <button class="tab-btn" onclick="showTab('profile')">👤 Profile</button>
                 <button class="tab-btn" onclick="showTab('cart')">🛒 Cart</button>
             </div>
             
@@ -331,46 +330,6 @@ $categories = $stmt->fetchAll();
                 </div>
             </div>
             
-            <!-- Profile Tab -->
-            <div id="profile" class="tab-content">
-                <h2>Profile Settings</h2>
-                <div style="background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-                    <form method="POST" action="update_profile.php">
-                        <div class="form-group">
-                            <label>User ID (Read Only)</label>
-                            <input type="text" value="<?php echo $user['cust_id']; ?>" class="form-control" readonly>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="username">Username</label>
-                            <input type="text" id="username" name="username" value="<?php echo htmlspecialchars($user['cust_username']); ?>" class="form-control">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="email">Email</label>
-                            <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($user['cust_email']); ?>" class="form-control">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="phone">Phone Number</label>
-                            <input type="tel" id="phone" name="phone" value="<?php echo htmlspecialchars($user['cust_phonenumber']); ?>" class="form-control">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="address">Address</label>
-                            <textarea id="address" name="address" class="form-control" rows="3"><?php echo htmlspecialchars($user['cust_address']); ?></textarea>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="new_password">New Password (leave blank to keep current)</label>
-                            <input type="password" id="new_password" name="new_password" class="form-control">
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary">Update Profile</button>
-                    </form>
-                </div>
-            </div>
-            
             <!-- About Tab -->
             <div id="about" class="tab-content">
                 <h2>About Rimbunan Cafe</h2>
@@ -465,7 +424,17 @@ function openModal(modalId) {
         document.getElementById('checkout-cart-items').value = JSON.stringify(cart);
         
         const subtotal = selectedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const total = subtotal + 5.00; // Add delivery fee
+        
+        // Calculate dynamic delivery fee based on quantity
+        const totalQuantity = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
+        let deliveryFee = 5.00; // Base fee for 1-4 items
+        if (totalQuantity > 8) {
+            deliveryFee = 15.00;
+        } else if (totalQuantity > 4) {
+            deliveryFee = 10.00;
+        }
+        
+        const total = subtotal + deliveryFee;
         document.getElementById('checkout-total-price').value = total.toFixed(2);
     }
     

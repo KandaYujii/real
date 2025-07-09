@@ -109,7 +109,6 @@ $riders = $stmt->fetchAll();
         <div class="dashboard-content">
             <div class="dashboard-tabs">
                 <button class="tab-btn active" onclick="showTab('orders')">📦 Order Management</button>
-                <button class="tab-btn" onclick="showTab('profile')">👤 Profile</button>
             </div>
             
             <!-- Orders Tab -->
@@ -123,7 +122,7 @@ $riders = $stmt->fetchAll();
                                 <th>Order ID</th>
                                 <th>Customer</th>
                                 <th>Items</th>
-                                <th>Payment</th>
+                                <th style="width: 150px;">Payment</th>
                                 <th>Total</th>
                                 <th>Status</th>
                                 <th>Rider</th>
@@ -137,13 +136,20 @@ $riders = $stmt->fetchAll();
                                     <td>
                                         <strong><?php echo htmlspecialchars($order['cust_username']); ?></strong><br>
                                         <small><?php echo htmlspecialchars($order['cust_phonenumber']); ?></small><br>
-                                        <small><?php echo htmlspecialchars($order['cust_address']); ?></small>
+                                        <small><?php echo htmlspecialchars($order['delivery_address'] ?? $order['cust_address']); ?></small>
                                     </td>
                                     <td><?php echo htmlspecialchars($order['items']); ?></td>
                                     <td>
-                                        <span class="status-badge <?php echo ($order['payment_method'] ?? 'cod') === 'cod' ? 'status-pending' : 'status-completed'; ?>">
-                                            <?php echo ($order['payment_method'] ?? 'cod') === 'cod' ? '💵 COD' : '📱 QR Paid'; ?>
-                                        </span>
+                                        <div style="white-space: nowrap;">
+                                            <span class="status-badge <?php echo ($order['payment_method'] ?? 'cod') === 'cod' ? 'status-pending' : 'status-completed'; ?>">
+                                                <?php echo ($order['payment_method'] ?? 'cod') === 'cod' ? '💵 COD' : '📱 QR Paid'; ?>
+                                            </span>
+                                            <?php if (($order['payment_method'] ?? 'cod') === 'qr' && $order['payment_proof']): ?>
+                                                <br><button class="btn" onclick="viewPaymentProof('<?php echo $order['payment_proof']; ?>')" style="background: #17a2b8; color: white; font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-top: 0.25rem;">
+                                                    📷 View Proof
+                                                </button>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                     <td>RM <?php echo number_format($order['total_price'], 2); ?></td>
                                     <td>
@@ -165,8 +171,18 @@ $riders = $stmt->fetchAll();
                                                 <select name="rider_id" class="form-control" style="margin-bottom: 0.5rem;">
                                                     <option value="">Select Rider</option>
                                                     <?php foreach ($riders as $rider): ?>
-                                                        <option value="<?php echo $rider['rider_id']; ?>" <?php echo $order['rider_id'] == $rider['rider_id'] ? 'selected' : ''; ?>>
+                                                        <?php 
+                                                        // Check if rider is available and not currently on delivery
+                                                        $stmt_check = $pdo->prepare("SELECT COUNT(*) as active_deliveries FROM orders WHERE rider_id = ? AND order_status = 'In Delivery'");
+                                                        $stmt_check->execute([$rider['rider_id']]);
+                                                        $active_deliveries = $stmt_check->fetch()['active_deliveries'];
+                                                        $is_available = $rider['rider_status'] == 1 && $active_deliveries == 0;
+                                                        ?>
+                                                        <option value="<?php echo $rider['rider_id']; ?>" 
+                                                                <?php echo $order['rider_id'] == $rider['rider_id'] ? 'selected' : ''; ?>
+                                                                <?php echo !$is_available ? 'disabled' : ''; ?>>
                                                             <?php echo htmlspecialchars($rider['rider_username']); ?>
+                                                            <?php echo !$is_available ? ' (Unavailable)' : ''; ?>
                                                         </option>
                                                     <?php endforeach; ?>
                                                 </select>
@@ -185,41 +201,6 @@ $riders = $stmt->fetchAll();
                             <?php endforeach; ?>
                         </tbody>
                     </table>
-                </div>
-            </div>
-            
-            <!-- Profile Tab -->
-            <div id="profile" class="tab-content">
-                <h2>Profile Settings</h2>
-                <div style="background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-                    <form method="POST">
-                        <div class="form-group">
-                            <label>Staff ID (Read Only)</label>
-                            <input type="text" value="<?php echo $staff['staff_id']; ?>" class="form-control" readonly>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="staff_name">Staff Name</label>
-                            <input type="text" id="staff_name" name="staff_name" value="<?php echo htmlspecialchars($staff['staff_name']); ?>" class="form-control" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="staff_email">Email</label>
-                            <input type="email" id="staff_email" name="staff_email" value="<?php echo htmlspecialchars($staff['staff_email']); ?>" class="form-control" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="staff_phone">Phone Number</label>
-                            <input type="tel" id="staff_phone" name="staff_phone" value="<?php echo htmlspecialchars($staff['staff_phonenumber']); ?>" class="form-control" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="staff_password">New Password (leave blank to keep current)</label>
-                            <input type="password" id="staff_password" name="staff_password" class="form-control">
-                        </div>
-                        
-                        <button type="submit" name="update_profile" class="btn btn-primary">Update Profile</button>
-                    </form>
                 </div>
             </div>
         </div>
